@@ -1,5 +1,12 @@
-const http = require('http');
+const express = require('express');
 const cors = require('cors');
+
+const app = express();
+const port = 8080;
+
+app.use(cors());
+app.options('*', cors());
+app.use(express.json());
 
 const accounts = [
   {
@@ -525,22 +532,7 @@ const orders = [
   }
 ]
 
-const server = http.createServer((req, res) => {
-  if (req.method === 'OPTIONS') {
-    // Respond to preflight request
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
-    res.writeHead(200);
-    res.end();
-    return;
-  }
-  
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type');
-  res.setHeader('Access-Control-Allow-Credentials', true);
-
+app.use((req, res, next) => {
   const [_, endpoint, id] = req.url.split('/');
 
   switch (endpoint) {
@@ -557,8 +549,7 @@ const server = http.createServer((req, res) => {
       handleRequest(req, res, carts, id);
       break;
     default:
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ message: 'Endpoint not found' }));
+      res.status(404).json({ message: 'Endpoint not found' });
   }
 });
 
@@ -568,47 +559,28 @@ function handleRequest(req, res, collection, id) {
       if (id) {
         const item = collection.find(i => i.id === id);
         if (item) {
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(item));
+          res.json(item);
         } else {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ message: 'Item not found' }));
+          res.status(404).json({ message: 'Item not found' });
         }
       } else {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(collection));
+        res.json(collection);
       }
       break;
     case 'POST':
-      let body = '';
-      req.on('data', chunk => {
-        body += chunk.toString();
-      });
-      req.on('end', () => {
-        const newItem = JSON.parse(body);
-        collection.push(newItem);
-        res.writeHead(201, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(newItem));
-      });
+      const newItem = req.body;
+      collection.push(newItem);
+      res.status(201).json(newItem);
       break;
     case 'PUT':
       if (id) {
-        let updateBody = '';
-        req.on('data', chunk => {
-          updateBody += chunk.toString();
-        });
-        req.on('end', () => {
-          const updatedItem = JSON.parse(updateBody);
-          const index = collection.findIndex(i => i.id === id);
-          if (index !== -1) {
-            collection[index] = updatedItem;
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(updatedItem));
-          } else {
-            res.writeHead(404, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ message: 'Item not found' }));
-          }
-        });
+        const index = collection.findIndex(i => i.id === id);
+        if (index !== -1) {
+          collection[index] = req.body;
+          res.json(collection[index]);
+        } else {
+          res.status(404).json({ message: 'Item not found' });
+        }
       }
       break;
     case 'DELETE':
@@ -616,21 +588,18 @@ function handleRequest(req, res, collection, id) {
         const index = collection.findIndex(i => i.id === id);
         if (index !== -1) {
           collection.splice(index, 1);
-          res.writeHead(204);
-          res.end();
+          res.status(204).end();
         } else {
-          res.writeHead(404, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ message: 'Item not found' }));
+          res.status(404).json({ message: 'Item not found' });
         }
       }
       break;
     default:
-      res.writeHead(405, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ message: 'Method not allowed' }));
+      res.status(405).json({ message: 'Method not allowed' });
   }
-};
+}
 
-const port = 8080;
-server.listen(port, () => {
+// Start the server
+app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
 });
